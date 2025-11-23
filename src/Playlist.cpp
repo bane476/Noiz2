@@ -4,6 +4,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <algorithm>
+#include <exception>
 #ifdef _WIN32
     #include <windows.h>
     #include <fileapi.h>
@@ -70,6 +72,15 @@ Playlist::Playlist(const std::string& name) : name(name), current_song_index(-1)
 Playlist::~Playlist() = default; // Default destructor is fine with unique_ptr
 
 void Playlist::add_song(const Song& song) {
+    // Check if song is already in the playlist (by title and artist to be safe)
+    for (const Song& existing_song : songs) {
+        if (existing_song.title == song.title && existing_song.artist == song.artist) {
+            std::cout << "Song '" << song.title << "' by " << song.artist << " is already in the playlist." << std::endl;
+            return;
+        }
+    }
+    
+    // Song is not a duplicate, add it
     songs.push_back(song);
     if (current_song_index == -1) { // If playlist was empty, set this as the first song
         current_song_index = 0;
@@ -179,17 +190,29 @@ void Playlist::show_playlist() const {
 }
 
 bool Playlist::save_to_file(const std::string& filename) const {
+    if (songs.empty()) {
+        std::cout << "Playlist is empty. Nothing to save." << std::endl;
+        return false;
+    }
+    
     std::ofstream outfile(filename);
     if (!outfile.is_open()) {
         std::cerr << "Error: Could not open file for writing: " << filename << std::endl;
+        std::cerr << "Make sure you have write permissions in the current directory." << std::endl;
         return false;
     }
 
+    int saved_count = 0;
     for (const Song& song : songs) {
-        outfile << song.title << "|" << song.artist << "|" << song.album << "|" << song.duration_seconds << "|" << song.file_path << std::endl;
+        // Escape any pipe characters in the data (though unlikely)
+        outfile << song.title << "|" << song.artist << "|" << song.album << "|" 
+                << song.duration_seconds << "|" << song.file_path << std::endl;
+        saved_count++;
     }
+    
+    outfile.close();
 
-    std::cout << "Playlist '" << name << "' saved to " << filename << std::endl;
+    std::cout << "Playlist '" << name << "' saved to " << filename << " (" << saved_count << " song(s))" << std::endl;
     return true;
 }
 
@@ -204,33 +227,93 @@ bool Playlist::load_from_file(const std::string& filename, MusicLibrary& library
     current_song_index = -1; // Reset index
 
     std::string line;
+    int line_number = 0;
+    int songs_loaded = 0;
+    
     while (std::getline(infile, line)) {
+        line_number++;
+        
+        // Skip empty lines
+        if (line.empty() || line.find_first_not_of(" \t\n\r") == std::string::npos) {
+            continue;
+        }
+        
         // Parse the line (title|artist|album|duration|filepath)
         size_t first_delim = line.find('|');
         size_t second_delim = line.find('|', first_delim + 1);
         size_t third_delim = line.find('|', second_delim + 1);
         size_t fourth_delim = line.find('|', third_delim + 1);
 
-
-        if (first_delim == std::string::npos || second_delim == std::string::npos || third_delim == std::string::npos || fourth_delim == std::string::npos) {
-            std::cerr << "Warning: Skipping malformed line in playlist file: " << line << std::endl;
+        if (first_delim == std::string::npos || second_delim == std::string::npos || 
+            third_delim == std::string::npos || fourth_delim == std::string::npos) {
+            std::cerr << "Warning: Skipping malformed line " << line_number << " in playlist file: " << line << std::endl;
             continue;
         }
 
-        std::string title = line.substr(0, first_delim);
-        std::string artist = line.substr(first_delim + 1, second_delim - (first_delim + 1));
-        std::string album = line.substr(second_delim + 1, third_delim - (second_delim + 1));
-        int duration = std::stoi(line.substr(third_delim + 1, fourth_delim - (third_delim + 1)));
-        std::string file_path = line.substr(fourth_delim + 1);
+        try {
+            std::string title = line.substr(0, first_delim);
+            std::string artist = line.substr(first_delim + 1, second_delim - (first_delim + 1));
+            std::string album = line.substr(second_delim + 1, third_delim - (second_delim + 1));
+            
+            // Safely parse duration
+            int duration = 0;
+            try {
+                std::string duration_str = line.substr(third_delim + 1, fourth_delim - (third_delim + 1));
+                if (!duration_str.empty()) {
+                    duration = std::stoi(duration_str);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Warning: Invalid duration on line " << line_number << ", using 0" << std::endl;
+            }
+            
+            std::string file_path = line.substr(fourth_delim + 1);
 
-        Song loaded_song = {title, artist, album, duration, file_path};
-        add_song(loaded_song);
+            // Try to find the song in the library first (by title)
+            Song* library_song = library.find_song(title);
+            if (library_song) {
+                // Use the song from library (has correct file path)
+                // Check if already in playlist before adding
+                bool is_duplicate = false;
+                for (const Song& existing_song : songs) {
+                    if (existing_song.title == library_song->title && existing_song.artist == library_song->artist) {
+                        is_duplicate = true;
+                        break;
+                    }
+                }
+                if (!is_duplicate) {
+                    add_song(*library_song);
+                    songs_loaded++;
+                } else {
+                    std::cout << "Skipping duplicate: '" << title << "' by " << artist << std::endl;
+                }
+            } else {
+                // Song not in library, create new one from file
+                // Check if already in playlist before adding
+                bool is_duplicate = false;
+                for (const Song& existing_song : songs) {
+                    if (existing_song.title == title && existing_song.artist == artist) {
+                        is_duplicate = true;
+                        break;
+                    }
+                }
+                if (!is_duplicate) {
+                    Song loaded_song = {title, artist, album, duration, file_path};
+                    add_song(loaded_song);
+                    songs_loaded++;
+                } else {
+                    std::cout << "Skipping duplicate: '" << title << "' by " << artist << std::endl;
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "Error parsing line " << line_number << ": " << e.what() << std::endl;
+            continue;
+        }
     }
 
     if (!songs.empty()) {
         current_song_index = 0; // Set first song as current after loading
     }
 
-    std::cout << "Playlist loaded from " << filename << std::endl;
+    std::cout << "Playlist loaded from " << filename << " (" << songs_loaded << " song(s) loaded)" << std::endl;
     return true;
 }
