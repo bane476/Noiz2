@@ -1,5 +1,0 @@
---- SFML Playback Test ---
-Failed to open sound file "test.ogg" (couldn't open stream)
-Error: Could not open music file 'test.ogg'.
-This is expected if the file doesn't exist.
-The important part is that the program compiled and linked with SFML!
