@@ -8,6 +8,7 @@ struct Song {
     std::string artist;
     std::string album;
     int duration_seconds;
+    std::string file_path;
 };
 
 #endif // SONG_H

@@ -31,6 +31,10 @@ target_link_libraries(MusicPlayer
     sfml-network
 )
 
+# Note: std::filesystem should be available in C++17 standard library
+# If linking fails, uncomment the line below:
+# target_link_libraries(MusicPlayer stdc++fs)
+
 # --- Copy DLLs to output directory (for Windows) ---
 # This command ensures the SFML DLLs are next to the .exe file so it can run.
 add_custom_command(TARGET MusicPlayer POST_BUILD

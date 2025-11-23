@@ -12,7 +12,10 @@ public:
     MusicLibrary();
     void add_song(const Song& song);
     Song* find_song(const std::string& title);
-    void list_all_songs();
+    Song* get_song_by_index(int index); // Get song by number (1-based)
+    int get_song_count() const; // Get total number of songs
+    void list_all_songs(); // Lists songs with numbers
+    int load_songs_from_directory(const std::string& directory_path); // Returns number of songs loaded
 
 private:
     static const int TABLE_SIZE = 128;
