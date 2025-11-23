@@ -1,0 +1,37 @@
+# --- Build output (NEVER commit) ---
+build/
+bin/
+out/
+dist/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# --- SFML / Libraries (if added manually) ---
+# vendor/           # uncomment if you add libs manually
+
+# --- Executables ---
+*.exe
+*.out
+*.a
+*.so
+*.dll
+*.lib
+*.pdb
+
+# --- IDE / Editor Files ---
+.vscode/
+*.code-workspace
+
+# --- OS Junk ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+
+# --- Temporary Files ---
+*.tmp
+*.swp
+*.bak
